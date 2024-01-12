@@ -272,7 +272,7 @@ struct CountdownTimerView: View {
 
         timeRemaining = selectedMinutes * 60 + selectedSeconds
 
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
             if timeRemaining > 0 {
                 // timeRemaining -= 1
                 selectedSeconds = timeRemaining%60
