@@ -1,3 +1,11 @@
+/*
+ 
+ UV Exposure Controller
+ 
+ (c) 2024 Leander Seige, leander@seige.name
+ 
+ */
+
 import SwiftUI
 import CoreBluetooth
 
@@ -6,16 +14,16 @@ struct Theme {
     static let headFont: Font = .system(size: 32.0)
     static let ultraFont: Font = .system(size: 64.0)
 
-
 }
+
+var timeRemaining = 0
+var isConnected = false
 
 struct CountdownTimerView: View {
     @State private var selectedMinutes = 0
     @State private var selectedSeconds = 0
-    @State private var timeRemaining = 0
     @State private var isTimerRunning = false
     @State private var timer: Timer?
-    @State private var isConnected = false
     
     @State private var quickbutton01min = 0
     @State private var quickbutton01sec = 30
@@ -25,9 +33,11 @@ struct CountdownTimerView: View {
     
     @State private var quickbutton03min = 2
     @State private var quickbutton03sec = 00
-    
+        
     let Hellgrau = Color(red: 0.85, green: 0.85, blue: 0.85)
     let Dunkelgrau = Color(red: 0.15, green: 0.15, blue: 0.15)
+    
+    
     
     @Environment(\.colorScheme) var colorScheme
 
@@ -213,10 +223,10 @@ struct CountdownTimerView: View {
             }) {
                 Text(isTimerRunning ? "Stop Timer" : "Start Timer")
                     .padding()
-                    .background(isTimerRunning ? Color.purple : Color.black)
-                    .foregroundColor(.white)
+                    .background(isTimerRunning ? Color.purple : (colorScheme == .light ? Color.black : Color.white))
+                    .foregroundColor((colorScheme == .light ? Color.white : Color.black))
                     .cornerRadius(10)
-                    .shadow(color: isTimerRunning ? Color.purple : Color.white, radius: 10)
+                    .shadow(color: isTimerRunning ? Color.purple : (colorScheme == .light ? Color.white : Color.black), radius: 10)
             }
             .padding()
 
@@ -262,9 +272,9 @@ struct CountdownTimerView: View {
 
         timeRemaining = selectedMinutes * 60 + selectedSeconds
 
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            if timeRemaining > 1 {
-                timeRemaining -= 1
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
+            if timeRemaining > 0 {
+                // timeRemaining -= 1
                 selectedSeconds = timeRemaining%60
                 selectedMinutes = Int(floor(Double(timeRemaining)/60))
             } else {
@@ -288,12 +298,12 @@ struct CountdownTimerView: View {
         // let currentTime = Date()
         // let formattedTime = DateFormatter.localizedString(from: currentTime, dateStyle: .short, timeStyle: .medium)
 
-        let startSignal = "on"
+        let startSignal = String(format: "ON#%d", selectedSeconds+selectedMinutes*60)
         bleManager.sendData(data: startSignal)
     }
 
     func sendStopSignal() {
-        let stopSignal = "off"
+        let stopSignal = "OFF#0"
         bleManager.sendData(data: stopSignal)
     }
     
@@ -329,20 +339,23 @@ struct CountdownTimerView: View {
 class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     private var centralManager: CBCentralManager!
     private var peripheral: CBPeripheral!
-    private var characteristic: CBCharacteristic?
+    private var sendCharacteristic: CBCharacteristic?
+    private var recvCharacteristic: CBCharacteristic?
     private var startAction: (() -> Void)?
     private var stopAction: (() -> Void)?
     private var connectAction: (() -> Void)?
     
     private var yourServiceUUID: CBUUID
-    private var yourCharacterisiticUUID: CBUUID
+    private var sendCharacteristicsUUID: CBUUID
+    private var recvCharacteristicsUUID: CBUUID
     
     var discoveredDevices: [CBPeripheral] = []
 
     init(startAction: @escaping () -> Void, stopAction: @escaping () -> Void, connectAction: @escaping () -> Void) {
 
         yourServiceUUID = CBUUID(string: "6e400001-b5a3-f393-e0a9-e50e24dcca9e")
-        yourCharacterisiticUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+        sendCharacteristicsUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+        recvCharacteristicsUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
 
         super.init()
 
@@ -359,13 +372,13 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func sendData(data: String) {
-        guard let characteristic = characteristic else {
-            print("Characteristic not found.")
+        guard let sendCharacteristic = sendCharacteristic else {
+            print("sendCharacteristic not found.")
             return
         }
 
         let dataToSend = data.data(using: .utf8)
-        peripheral.writeValue(dataToSend!, for: characteristic, type: .withResponse)
+        peripheral.writeValue(dataToSend!, for: sendCharacteristic, type: .withResponse)
     }
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -412,6 +425,7 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 */
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         print("CONNECTED")
+        isConnected = true
         peripheral.delegate = self
         peripheral.discoverServices(nil)
         // connectAction?()  // Trigger connect action when peripheral is connected
@@ -421,7 +435,7 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         if let services = peripheral.services {
             for service in services {
                 print(service.uuid)
-                peripheral.discoverCharacteristics([yourCharacterisiticUUID], for: service)
+                peripheral.discoverCharacteristics([sendCharacteristicsUUID,recvCharacteristicsUUID], for: service)
             }
         }
     }
@@ -429,18 +443,38 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let characteristics = service.characteristics {
             for characteristic in characteristics {
-                print(characteristic.uuid)
-                self.characteristic = characteristic
-                /* if characteristic.properties.contains(.write) {
+                if(characteristic.uuid==sendCharacteristicsUUID) {
+                    self.sendCharacteristic = characteristic
+                }
+                if(characteristic.uuid==recvCharacteristicsUUID) {
+                    self.recvCharacteristic = characteristic
+                    peripheral.setNotifyValue(true, for: characteristic)
+                }
+                /*
+                if characteristic.properties.contains(.write) {
                     self.characteristic = characteristic
                     startAction?()  // Trigger start action when characteristic is found
                 }*/
             }
         }
     }
+    
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+            if let data = characteristic.value {
+                // Handle the received data
+                let receivedString = String(data: data, encoding: .utf8)
+                print(receivedString ?? "")
+                timeRemaining = Int(receivedString ?? "0") ?? 0
+            }
+        }
 
     func connectToDevice() {
         scanForPeripheral()
     }
+    
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+            print("Disconnected from peripheral: \(peripheral.name ?? "Unknown")")
+            isConnected = false
+        }
 }
 

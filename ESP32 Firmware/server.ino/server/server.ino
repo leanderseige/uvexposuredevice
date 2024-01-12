@@ -16,6 +16,8 @@ bool deviceConnected = false;
 bool oldDeviceConnected = false;
 uint8_t txValue = 0;
 
+int timeRunner = 0;
+
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
 
@@ -35,22 +37,23 @@ class MyServerCallbacks: public BLEServerCallbacks {
 };
 
 class MyCallbacks: public BLECharacteristicCallbacks {
+
     void onWrite(BLECharacteristic *pCharacteristic) {
-      std::string rxValue = pCharacteristic->getValue();
+      String rxValue = String((pCharacteristic->getValue()).c_str());
+      String command = "";
+      String value = "";
 
       if (rxValue.length() > 0) {
-        if(rxValue[0]=='o' && rxValue[1]=='n') {
-            digitalWrite(LED,HIGH);
-        } else {
-            digitalWrite(LED,LOW);
+        Serial.println(rxValue);
+        int idx =  rxValue.indexOf('#');
+        command = rxValue.substring(0,idx);
+        value = rxValue.substring(idx+1);
+        if(command=="ON") {
+          timeRunner = value.toInt();
         }
-        Serial.println("*********");
-        Serial.print("Received Value: ");
-        for (int i = 0; i < rxValue.length(); i++)
-          Serial.print(rxValue[i]);
-
-        Serial.println();
-        Serial.println("*********");
+        if(command=="OFF") {
+          timeRunner = 0;
+        }
       }
     }
 };
@@ -95,27 +98,33 @@ void setup() {
 }
 
 void loop() {
+    String txValue = String(timeRunner);
 
-    if (deviceConnected) {
-        pTxCharacteristic->setValue(&txValue, 1);
+  if (deviceConnected) {
+        pTxCharacteristic->setValue((char*)&txValue);
         pTxCharacteristic->notify();
-        txValue++;
-        Serial.println("I AM CONNECTED");
-		    delay(1000); // bluetooth stack will go into congestion, if too many packets are sent
+        if(timeRunner>0) {
+          timeRunner = timeRunner-1;
+          digitalWrite(LED,HIGH);
+        } else {
+          digitalWrite(LED,LOW);
+        }
 	} else {
     Serial.println("NOT CONNECTED");
   }
 
-    // disconnecting
-    if (!deviceConnected && oldDeviceConnected) {
-        delay(500); // give the bluetooth stack the chance to get things ready
-        pServer->startAdvertising(); // restart advertising
-        Serial.println("start advertising");
-        oldDeviceConnected = deviceConnected;
-    }
-    // connecting
-    if (deviceConnected && !oldDeviceConnected) {
-		// do stuff here on connecting
-        oldDeviceConnected = deviceConnected;
-    }
+  delay(1000);
+
+  // disconnecting
+  if (!deviceConnected && oldDeviceConnected) {
+      delay(500); // give the bluetooth stack the chance to get things ready
+      pServer->startAdvertising(); // restart advertising
+      Serial.println("start advertising");
+      oldDeviceConnected = deviceConnected;
+  }
+  // connecting
+  if (deviceConnected && !oldDeviceConnected) {
+  // do stuff here on connecting
+      oldDeviceConnected = deviceConnected;
+  }
 }
