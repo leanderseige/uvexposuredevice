@@ -1,3 +1,11 @@
+/*
+ 
+ UV Exposure Controller
+ 
+ (c) 2024 Leander Seige, leander@seige.name
+ 
+ */
+
 import SwiftUI
 
 @main
