@@ -27,6 +27,9 @@ struct CountdownTimerView: View {
     @State private var quickbutton03sec = 00
     
     let Hellgrau = Color(red: 0.85, green: 0.85, blue: 0.85)
+    let Dunkelgrau = Color(red: 0.15, green: 0.15, blue: 0.15)
+    
+    @Environment(\.colorScheme) var colorScheme
 
     private var bleManager: BLEManager!
 
@@ -131,7 +134,7 @@ struct CountdownTimerView: View {
 
                 Text(String(format: "%02d", selectedMinutes) + " min")
                     .font(Theme.numberFont)
-                    .foregroundColor(isTimerRunning ? Color.purple : Color.black)
+                    .foregroundColor(isTimerRunning ? Color.purple : (colorScheme == .light ? Color.black : Color.white))
                     .bold(true)
 
                 Button(action: {
@@ -176,7 +179,7 @@ struct CountdownTimerView: View {
 
                 Text(String(format: "%02d", selectedSeconds) + " sec")
                     .font(Theme.numberFont)
-                    .foregroundColor(isTimerRunning ? Color.purple : Color.black)
+                    .foregroundColor(isTimerRunning ? Color.purple : (colorScheme == .light ? Color.black : Color.white))
                     .bold(true)
                 
                 Button(action: {
@@ -260,12 +263,13 @@ struct CountdownTimerView: View {
         timeRemaining = selectedMinutes * 60 + selectedSeconds
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            if timeRemaining > 0 {
+            if timeRemaining > 1 {
                 timeRemaining -= 1
                 selectedSeconds = timeRemaining%60
                 selectedMinutes = Int(floor(Double(timeRemaining)/60))
             } else {
                 stopTimer()
+                sendStopSignal()
             }
         }
 
@@ -281,15 +285,15 @@ struct CountdownTimerView: View {
     }
 
     func sendStartSignal() {
-        let currentTime = Date()
-        let formattedTime = DateFormatter.localizedString(from: currentTime, dateStyle: .short, timeStyle: .medium)
+        // let currentTime = Date()
+        // let formattedTime = DateFormatter.localizedString(from: currentTime, dateStyle: .short, timeStyle: .medium)
 
-        let startSignal = "START\(formattedTime)"
+        let startSignal = "on"
         bleManager.sendData(data: startSignal)
     }
 
     func sendStopSignal() {
-        let stopSignal = "STOP"
+        let stopSignal = "off"
         bleManager.sendData(data: stopSignal)
     }
     
@@ -329,9 +333,19 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     private var startAction: (() -> Void)?
     private var stopAction: (() -> Void)?
     private var connectAction: (() -> Void)?
+    
+    private var yourServiceUUID: CBUUID
+    private var yourCharacterisiticUUID: CBUUID
+    
+    var discoveredDevices: [CBPeripheral] = []
 
     init(startAction: @escaping () -> Void, stopAction: @escaping () -> Void, connectAction: @escaping () -> Void) {
+
+        yourServiceUUID = CBUUID(string: "6e400001-b5a3-f393-e0a9-e50e24dcca9e")
+        yourCharacterisiticUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+
         super.init()
+
         self.centralManager = CBCentralManager(delegate: self, queue: nil)
         self.startAction = { [weak self] in
             self?.startAction?()
@@ -356,6 +370,7 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == .poweredOn {
+            print("BT is on.")
             scanForPeripheral()
         } else {
             print("Bluetooth is not available.")
@@ -363,25 +378,50 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     }
 
     func scanForPeripheral() {
-        centralManager.scanForPeripherals(withServices: nil, options: nil)
-    }
+        print("SCANNING")
+        let options = [CBCentralManagerScanOptionAllowDuplicatesKey: true]
 
+        centralManager.scanForPeripherals(withServices: nil, options: options)
+        // centralManager.scanForPeripherals(withServices: [yourServiceUUID], options: options)
+
+    }
+    
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
+            // Check if the discovered peripheral is not already in the list
+            if !discoveredDevices.contains(peripheral) {
+                discoveredDevices.append(peripheral)
+                print("Discovered device: \(peripheral.name ?? "Unknown")")
+                print("Peripheral Identifier: \(peripheral.identifier)")
+                print("Advertisement Data: \(advertisementData)")
+                print("RSSI: \(RSSI)")
+                print("===========")
+                if(peripheral.name=="UART Service") {
+                    centralManager.stopScan()
+                    self.peripheral = peripheral
+                    centralManager.connect(self.peripheral, options: nil)
+                }
+            }
+        }
+/*
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi: NSNumber) {
+        print("DISCOVERED")
         centralManager.stopScan()
         self.peripheral = peripheral
         centralManager.connect(self.peripheral, options: nil)
     }
-
+*/
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        print("CONNECTED")
         peripheral.delegate = self
         peripheral.discoverServices(nil)
-        connectAction?()  // Trigger connect action when peripheral is connected
+        // connectAction?()  // Trigger connect action when peripheral is connected
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let services = peripheral.services {
             for service in services {
-                peripheral.discoverCharacteristics(nil, for: service)
+                print(service.uuid)
+                peripheral.discoverCharacteristics([yourCharacterisiticUUID], for: service)
             }
         }
     }
@@ -389,10 +429,12 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let characteristics = service.characteristics {
             for characteristic in characteristics {
-                if characteristic.properties.contains(.write) {
+                print(characteristic.uuid)
+                self.characteristic = characteristic
+                /* if characteristic.properties.contains(.write) {
                     self.characteristic = characteristic
                     startAction?()  // Trigger start action when characteristic is found
-                }
+                }*/
             }
         }
     }
