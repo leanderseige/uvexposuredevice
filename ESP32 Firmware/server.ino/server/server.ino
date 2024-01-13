@@ -98,22 +98,25 @@ void setup() {
 }
 
 void loop() {
-    String txValue = String(timeRunner);
+  String txValue = String(timeRunner);
 
-  if (deviceConnected) {
-        pTxCharacteristic->setValue((char*)&txValue);
-        pTxCharacteristic->notify();
-        if(timeRunner>0) {
-          timeRunner = timeRunner-1;
-          digitalWrite(LED,HIGH);
-        } else {
-          digitalWrite(LED,LOW);
-        }
-	} else {
-    Serial.println("NOT CONNECTED");
+  for(int c=0;c<10;c++) {
+    if (deviceConnected) {
+          pTxCharacteristic->setValue((char*)&txValue);
+          pTxCharacteristic->notify();
+          if(timeRunner>0) {
+            if(c==9) {
+              timeRunner = timeRunner-1;
+            }            
+            digitalWrite(LED,HIGH);
+          } else {
+            digitalWrite(LED,LOW);
+          }
+    } else {
+      Serial.println("NOT CONNECTED");
+    }
+    delay(100);
   }
-
-  delay(1000);
 
   // disconnecting
   if (!deviceConnected && oldDeviceConnected) {

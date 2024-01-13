@@ -8,6 +8,7 @@
 
 import SwiftUI
 import CoreBluetooth
+import UserNotifications
 
 struct Theme {
     static let numberFont: Font = .system(size: 32.0, design: .monospaced)
@@ -18,6 +19,7 @@ struct Theme {
 
 var timeRemaining = 0
 var isConnected = false
+var startLock = false
 
 struct CountdownTimerView: View {
     @State private var selectedMinutes = 0
@@ -33,6 +35,8 @@ struct CountdownTimerView: View {
     
     @State private var quickbutton03min = 2
     @State private var quickbutton03sec = 00
+    
+    @State private var Trigger = false
         
     let Hellgrau = Color(red: 0.85, green: 0.85, blue: 0.85)
     let Dunkelgrau = Color(red: 0.15, green: 0.15, blue: 0.15)
@@ -42,13 +46,17 @@ struct CountdownTimerView: View {
     @Environment(\.colorScheme) var colorScheme
 
     private var bleManager: BLEManager!
+    private var notificationManager: UVNotificationManager!
 
     init() {
         self.bleManager = BLEManager(
             startAction: startTimer,
             stopAction: stopTimer,
-            connectAction: connectToDevice
+            connectAction: connectToDevice,
+            disconnectAction: handleDisconnect,
+            updateUI: updateUI
         )
+        self.notificationManager = UVNotificationManager()
     }
 
     var body: some View {
@@ -217,8 +225,9 @@ struct CountdownTimerView: View {
                     stopTimer()
                     sendStopSignal()
                 } else {
-                    startTimer()
+                    timeRemaining = selectedMinutes * 60 + selectedSeconds
                     sendStartSignal()
+                    startTimer()
                 }
             }) {
                 Text(isTimerRunning ? "Stop Timer" : "Start Timer")
@@ -269,10 +278,7 @@ struct CountdownTimerView: View {
 
     func startTimer() {
         guard !isTimerRunning else { return }
-
-        timeRemaining = selectedMinutes * 60 + selectedSeconds
-
-
+        
         timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
             if timeRemaining > 0 {
                 // timeRemaining -= 1
@@ -281,6 +287,7 @@ struct CountdownTimerView: View {
             } else {
                 stopTimer()
                 sendStopSignal()
+                notificationManager.scheduleNotification()
             }
         }
 
@@ -301,6 +308,7 @@ struct CountdownTimerView: View {
 
         let startSignal = String(format: "ON#%d", selectedSeconds+selectedMinutes*60)
         bleManager.sendData(data: startSignal)
+        usleep(500000)
     }
 
     func sendStopSignal() {
@@ -335,6 +343,17 @@ struct CountdownTimerView: View {
     func connectToDevice() {
         bleManager.connectToDevice()
     }
+    
+    func handleDisconnect() {
+        // Perform actions upon disconnect
+        print("Bluetooth device disconnected.")
+        // Add your custom logic here...
+    }
+    
+    func updateUI() {
+        Trigger = !Trigger
+    }
+    
 }
 
 class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
@@ -351,8 +370,11 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     private var recvCharacteristicsUUID: CBUUID
     
     var discoveredDevices: [CBPeripheral] = []
+    
+    var disconnectAction: (() -> Void)?
+    var updateUI: (() -> Void)?
 
-    init(startAction: @escaping () -> Void, stopAction: @escaping () -> Void, connectAction: @escaping () -> Void) {
+    init(startAction: @escaping () -> Void, stopAction: @escaping () -> Void, connectAction: @escaping () -> Void, disconnectAction: (() -> Void)?, updateUI: @escaping () -> Void) {
 
         yourServiceUUID = CBUUID(string: "6e400001-b5a3-f393-e0a9-e50e24dcca9e")
         sendCharacteristicsUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
@@ -370,6 +392,10 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         self.connectAction = { [weak self] in
             self?.connectAction?()
         }
+        
+        self.disconnectAction = disconnectAction
+        self.updateUI = updateUI
+
     }
 
     func sendData(data: String) {
@@ -472,10 +498,43 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     func connectToDevice() {
         scanForPeripheral()
     }
-    
+        
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+            disconnectAction?()
+            updateUI?() // Notify for UI update after disconnection
             print("Disconnected from peripheral: \(peripheral.name ?? "Unknown")")
             isConnected = false
         }
+
 }
+
+
+class UVNotificationManager {
+
+    func scheduleNotification() {
+        // Create a notification content
+        let content = UNMutableNotificationContent()
+        content.title = "Your Notification Title"
+        content.body = "Your Notification Body"
+        
+        // Set the notification sound
+        content.sound = UNNotificationSound.default
+        
+        // Create a trigger for the notification (you can customize this based on your requirements)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+        
+        // Create a notification request
+        let request = UNNotificationRequest(identifier: "YourNotificationIdentifier", content: content, trigger: trigger)
+        
+        // Add the notification request to the notification center
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error scheduling notification: \(error.localizedDescription)")
+            } else {
+                print("Notification scheduled successfully")
+            }
+        }
+    }
+}
+
 
