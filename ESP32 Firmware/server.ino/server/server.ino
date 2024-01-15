@@ -9,9 +9,10 @@
 #include <BLE2902.h>
 
 #define LED 13
+#define TESTLED 2
 
 BLEServer *pServer = NULL;
-BLECharacteristic * pTxCharacteristic;
+BLECharacteristic *pTxCharacteristic;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 uint8_t txValue = 0;
@@ -21,46 +22,51 @@ int timeRunner = 0;
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
 
-#define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E" // UART service UUID
+#define SERVICE_UUID "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"  // UART service UUID
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 #define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 
-class MyServerCallbacks: public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) {
-      deviceConnected = true;
-    };
+class MyServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer *pServer) {
+    deviceConnected = true;
+  };
 
-    void onDisconnect(BLEServer* pServer) {
-      deviceConnected = false;
-    }
+  void onDisconnect(BLEServer *pServer) {
+    deviceConnected = false;
+  }
 };
 
-class MyCallbacks: public BLECharacteristicCallbacks {
+class MyCallbacks : public BLECharacteristicCallbacks {
 
-    void onWrite(BLECharacteristic *pCharacteristic) {
-      String rxValue = String((pCharacteristic->getValue()).c_str());
-      String command = "";
-      String value = "";
+  void onWrite(BLECharacteristic *pCharacteristic) {
+    String rxValue = String((pCharacteristic->getValue()).c_str());
+    String command = "";
+    String value = "";
 
-      if (rxValue.length() > 0) {
-        Serial.println(rxValue);
-        int idx =  rxValue.indexOf('#');
-        command = rxValue.substring(0,idx);
-        value = rxValue.substring(idx+1);
-        if(command=="ON") {
-          timeRunner = value.toInt();
-        }
-        if(command=="OFF") {
-          timeRunner = 0;
-        }
+    if (rxValue.length() > 0) {
+      Serial.println(rxValue);
+      int idx = rxValue.indexOf('#');
+      command = rxValue.substring(0, idx);
+      value = rxValue.substring(idx + 1);
+      if (command == "ON") {
+        timeRunner = value.toInt();
+      }
+      if (command == "OFF") {
+        timeRunner = 0;
       }
     }
+  }
 };
 
 
 void setup() {
-  pinMode(LED,OUTPUT);
+  pinMode(LED, OUTPUT);
+  pinMode(TESTLED, OUTPUT);
+
+  digitalWrite(LED, LOW);
+  digitalWrite(TESTLED, LOW);
+
 
   Serial.begin(115200);
 
@@ -76,16 +82,14 @@ void setup() {
 
   // Create a BLE Characteristic
   pTxCharacteristic = pService->createCharacteristic(
-										CHARACTERISTIC_UUID_TX,
-										BLECharacteristic::PROPERTY_NOTIFY
-									);
-                      
+    CHARACTERISTIC_UUID_TX,
+    BLECharacteristic::PROPERTY_NOTIFY);
+
   pTxCharacteristic->addDescriptor(new BLE2902());
 
-  BLECharacteristic * pRxCharacteristic = pService->createCharacteristic(
-											 CHARACTERISTIC_UUID_RX,
-											BLECharacteristic::PROPERTY_WRITE
-										);
+  BLECharacteristic *pRxCharacteristic = pService->createCharacteristic(
+    CHARACTERISTIC_UUID_RX,
+    BLECharacteristic::PROPERTY_WRITE);
 
   pRxCharacteristic->setCallbacks(new MyCallbacks());
 
@@ -95,39 +99,49 @@ void setup() {
   // Start advertising
   pServer->getAdvertising()->start();
   Serial.println("Waiting a client connection to notify...");
+
+  for (int c = 0; c < 3; c++) {
+    digitalWrite(TESTLED, HIGH);
+    delay(100);
+    digitalWrite(TESTLED, LOW);
+    delay(100);
+  }
 }
 
 void loop() {
   String txValue = String(timeRunner);
 
-  for(int c=0;c<10;c++) {
-    if (deviceConnected) {
-          pTxCharacteristic->setValue((char*)&txValue);
-          pTxCharacteristic->notify();
-          if(timeRunner>0) {
-            if(c==9) {
-              timeRunner = timeRunner-1;
-            }            
-            digitalWrite(LED,HIGH);
-          } else {
-            digitalWrite(LED,LOW);
-          }
-    } else {
-      Serial.println("NOT CONNECTED");
+
+  if (deviceConnected) {
+    for (int c = 0; c < 10; c++) {
+      pTxCharacteristic->setValue((char *)&txValue);
+      pTxCharacteristic->notify();
+      if (timeRunner > 0) {
+        if (c == 9) {
+          timeRunner = timeRunner - 1;
+        }
+        digitalWrite(LED, HIGH);
+        digitalWrite(TESTLED, HIGH);
+      } else {
+        digitalWrite(LED, LOW);
+        digitalWrite(TESTLED, LOW);
+      }
+      delay(100);
     }
-    delay(100);
+  } else {
+    Serial.println("NOT CONNECTED");
   }
 
   // disconnecting
   if (!deviceConnected && oldDeviceConnected) {
-      delay(500); // give the bluetooth stack the chance to get things ready
-      pServer->startAdvertising(); // restart advertising
-      Serial.println("start advertising");
-      oldDeviceConnected = deviceConnected;
+    delay(500);                   // give the bluetooth stack the chance to get things ready
+    pServer->startAdvertising();  // restart advertising
+    Serial.println("start advertising");
+    oldDeviceConnected = deviceConnected;
   }
   // connecting
   if (deviceConnected && !oldDeviceConnected) {
-  // do stuff here on connecting
-      oldDeviceConnected = deviceConnected;
+    // do stuff here on connecting
+    oldDeviceConnected = deviceConnected;
   }
 }
