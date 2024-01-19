@@ -9,12 +9,13 @@
 import SwiftUI
 import CoreBluetooth
 import UserNotifications
+import AVFoundation
 
 struct Theme {
     static let numberFont: Font = .system(size: 32.0, design: .monospaced)
     static let headFont: Font = .system(size: 32.0)
     static let ultraFont: Font = .system(size: 64.0)
-
+    
 }
 
 var timeRemaining = 0
@@ -37,17 +38,16 @@ struct CountdownTimerView: View {
     @State private var quickbutton03sec = 00
     
     @State private var Trigger = false
-        
+    
     let Hellgrau = Color(red: 0.85, green: 0.85, blue: 0.85)
     let Dunkelgrau = Color(red: 0.15, green: 0.15, blue: 0.15)
     
     
     
     @Environment(\.colorScheme) var colorScheme
-
+    
     private var bleManager: BLEManager!
-    private var notificationManager: UVNotificationManager!
-
+    
     init() {
         self.bleManager = BLEManager(
             startAction: startTimer,
@@ -56,12 +56,11 @@ struct CountdownTimerView: View {
             disconnectAction: handleDisconnect,
             updateUI: updateUI
         )
-        self.notificationManager = UVNotificationManager()
     }
-
+    
     var body: some View {
         VStack {
- 
+            
             Text("UV")
                 .font(Theme.ultraFont)
                 .foregroundColor(.purple)
@@ -73,8 +72,8 @@ struct CountdownTimerView: View {
                 .font(Theme.headFont)
                 .foregroundColor(.purple)
                 .bold(true)
-
-
+            
+            
             
             HStack(spacing: 4) {
                 Button(action: {
@@ -93,7 +92,7 @@ struct CountdownTimerView: View {
                 })
                 .padding()
                 .disabled(isTimerRunning)
-
+                
                 
                 Button(action: {
                     setTime(min: quickbutton02min,sec: quickbutton02sec)
@@ -128,7 +127,7 @@ struct CountdownTimerView: View {
                 })
                 .padding()
                 .disabled(isTimerRunning)
-
+                
             }
             
             HStack(spacing: 20) {
@@ -140,7 +139,7 @@ struct CountdownTimerView: View {
                         .foregroundColor(isTimerRunning ? Hellgrau : Color.purple)
                 }
                 .disabled(isTimerRunning)
-
+                
                 Button(action: {
                     adjustTime(increase: true, isMinutes: true, value: 1)
                 }) {
@@ -149,12 +148,12 @@ struct CountdownTimerView: View {
                         .foregroundColor(isTimerRunning ? Hellgrau : Color.purple)
                 }
                 .disabled(isTimerRunning)
-
+                
                 Text(String(format: "%02d", selectedMinutes) + " min")
                     .font(Theme.numberFont)
                     .foregroundColor(isTimerRunning ? Color.purple : (colorScheme == .light ? Color.black : Color.white))
                     .bold(true)
-
+                
                 Button(action: {
                     adjustTime(increase: false, isMinutes: true, value: 1)
                 }) {
@@ -174,7 +173,7 @@ struct CountdownTimerView: View {
                 .disabled(isTimerRunning)
             }
             .padding()
-
+            
             HStack(spacing: 20) {
                 
                 Button(action: {
@@ -194,7 +193,7 @@ struct CountdownTimerView: View {
                         .foregroundColor(isTimerRunning ? Hellgrau : Color.purple)
                 }
                 .disabled(isTimerRunning)
-
+                
                 Text(String(format: "%02d", selectedSeconds) + " sec")
                     .font(Theme.numberFont)
                     .foregroundColor(isTimerRunning ? Color.purple : (colorScheme == .light ? Color.black : Color.white))
@@ -219,7 +218,7 @@ struct CountdownTimerView: View {
                 .disabled(isTimerRunning)
             }
             .padding()
-
+            
             Button(action: {
                 if isTimerRunning {
                     stopTimer()
@@ -238,7 +237,7 @@ struct CountdownTimerView: View {
                     .shadow(color: isTimerRunning ? Color.purple : (colorScheme == .light ? Color.white : Color.black), radius: 10)
             }
             .padding()
-
+            
             HStack {
                 if isConnected {
                     RoundedRectangle(cornerRadius: 10)
@@ -255,7 +254,7 @@ struct CountdownTimerView: View {
                 }
             }
             .padding()
-
+            
             Button(action: {
                 connectToDevice()
             }) {
@@ -266,16 +265,17 @@ struct CountdownTimerView: View {
                         .padding()
                         .background(Color.blue)
                         .foregroundColor(.white)
-
+                    
                 }
                 .background(Color.blue)
                 .cornerRadius(12)
                 .padding()
+                .disabled(isConnected)
             }
         }
         .padding()
     }
-
+    
     func startTimer() {
         guard !isTimerRunning else { return }
         
@@ -287,13 +287,12 @@ struct CountdownTimerView: View {
             } else {
                 stopTimer()
                 sendStopSignal()
-                notificationManager.scheduleNotification()
+                playSignal()
             }
         }
-
         isTimerRunning = true
     }
-
+    
     func stopTimer() {
         timer?.invalidate()
         timer = nil
@@ -301,16 +300,21 @@ struct CountdownTimerView: View {
         timeRemaining = 0
         resetTime()
     }
-
+    
+    func playSignal() {
+        let systemSoundID: SystemSoundID = 1304
+        AudioServicesPlaySystemSound(systemSoundID)
+    }
+    
     func sendStartSignal() {
         // let currentTime = Date()
         // let formattedTime = DateFormatter.localizedString(from: currentTime, dateStyle: .short, timeStyle: .medium)
-
+        
         let startSignal = String(format: "ON#%d", selectedSeconds+selectedMinutes*60)
         bleManager.sendData(data: startSignal)
         usleep(500000)
     }
-
+    
     func sendStopSignal() {
         let stopSignal = "OFF#0"
         bleManager.sendData(data: stopSignal)
@@ -320,7 +324,7 @@ struct CountdownTimerView: View {
         selectedMinutes = min
         selectedSeconds = sec
     }
-
+    
     func adjustTime(increase: Bool, isMinutes: Bool, value: Int) {
         if isMinutes {
             selectedMinutes += increase ? value : (selectedMinutes > 0 ? -value : 0)
@@ -334,12 +338,12 @@ struct CountdownTimerView: View {
             }
         }
     }
-
+    
     func resetTime() {
         selectedMinutes = 0
         selectedSeconds = 0
     }
-
+    
     func connectToDevice() {
         bleManager.connectToDevice()
     }
@@ -373,15 +377,15 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     
     var disconnectAction: (() -> Void)?
     var updateUI: (() -> Void)?
-
+    
     init(startAction: @escaping () -> Void, stopAction: @escaping () -> Void, connectAction: @escaping () -> Void, disconnectAction: (() -> Void)?, updateUI: @escaping () -> Void) {
-
-        yourServiceUUID = CBUUID(string: "6e400001-b5a3-f393-e0a9-e50e24dcca9e")
-        sendCharacteristicsUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
-        recvCharacteristicsUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
-
+        
+        yourServiceUUID = CBUUID(string: "BB82E92C-1477-4FD6-B59F-3AE6AEC3B706")
+        sendCharacteristicsUUID = CBUUID(string: "B7EA89CF-9E06-4F8A-8017-1F6B63EA6E20")
+        recvCharacteristicsUUID = CBUUID(string: "17A87C7C-582D-4500-B229-29AAE234910C")
+        
         super.init()
-
+        
         self.centralManager = CBCentralManager(delegate: self, queue: nil)
         self.startAction = { [weak self] in
             self?.startAction?()
@@ -395,19 +399,19 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         
         self.disconnectAction = disconnectAction
         self.updateUI = updateUI
-
+        
     }
-
+    
     func sendData(data: String) {
         guard let sendCharacteristic = sendCharacteristic else {
             print("sendCharacteristic not found.")
             return
         }
-
+        
         let dataToSend = data.data(using: .utf8)
         peripheral.writeValue(dataToSend!, for: sendCharacteristic, type: .withResponse)
     }
-
+    
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == .poweredOn {
             print("BT is on.")
@@ -416,40 +420,43 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
             print("Bluetooth is not available.")
         }
     }
-
+    
     func scanForPeripheral() {
         print("SCANNING")
         let options = [CBCentralManagerScanOptionAllowDuplicatesKey: true]
-
+        
         centralManager.scanForPeripherals(withServices: nil, options: options)
         // centralManager.scanForPeripherals(withServices: [yourServiceUUID], options: options)
-
+        
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-            // Check if the discovered peripheral is not already in the list
-            if !discoveredDevices.contains(peripheral) {
-                discoveredDevices.append(peripheral)
-                print("Discovered device: \(peripheral.name ?? "Unknown")")
-                print("Peripheral Identifier: \(peripheral.identifier)")
-                print("Advertisement Data: \(advertisementData)")
-                print("RSSI: \(RSSI)")
-                print("===========")
-                if(peripheral.name=="UART Service") {
-                    centralManager.stopScan()
-                    self.peripheral = peripheral
-                    centralManager.connect(self.peripheral, options: nil)
-                }
-            }
-        }
-/*
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi: NSNumber) {
-        print("DISCOVERED")
-        centralManager.stopScan()
-        self.peripheral = peripheral
-        centralManager.connect(self.peripheral, options: nil)
+        // Check if the discovered peripheral is not already in the list
+        /*          if !discoveredDevices.contains(peripheral) {
+         discoveredDevices.append(peripheral)
+         print("Discovered device: \(peripheral.name ?? "Unknown")")
+         print("Peripheral Identifier: \(peripheral.identifier)")
+         print("Advertisement Data: \(advertisementData)")
+         print("RSSI: \(RSSI)")
+         print("===========")
+         */
+        if(peripheral.name=="UVExposureDevice") {
+             centralManager.stopScan()
+             self.peripheral = peripheral
+             centralManager.connect(self.peripheral, options: nil)
+         } else {
+             print("Ignoring device: \(peripheral.name ?? "Unknown")")
+         }
+        //      }
     }
-*/
+    /*
+     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi: NSNumber) {
+     print("DISCOVERED")
+     centralManager.stopScan()
+     self.peripheral = peripheral
+     centralManager.connect(self.peripheral, options: nil)
+     }
+     */
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         print("CONNECTED")
         isConnected = true
@@ -457,7 +464,7 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         peripheral.discoverServices(nil)
         // connectAction?()  // Trigger connect action when peripheral is connected
     }
-
+    
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let services = peripheral.services {
             for service in services {
@@ -466,7 +473,7 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
             }
         }
     }
-
+    
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let characteristics = service.characteristics {
             for characteristic in characteristics {
@@ -478,63 +485,32 @@ class BLEManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
                     peripheral.setNotifyValue(true, for: characteristic)
                 }
                 /*
-                if characteristic.properties.contains(.write) {
-                    self.characteristic = characteristic
-                    startAction?()  // Trigger start action when characteristic is found
-                }*/
+                 if characteristic.properties.contains(.write) {
+                 self.characteristic = characteristic
+                 startAction?()  // Trigger start action when characteristic is found
+                 }*/
             }
         }
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-            if let data = characteristic.value {
-                // Handle the received data
-                let receivedString = String(data: data, encoding: .utf8)
-                print(receivedString ?? "")
-                timeRemaining = Int(receivedString ?? "0") ?? 0
-            }
+        if let data = characteristic.value {
+            // Handle the received data
+            let receivedString = String(data: data, encoding: .utf8)
+            print(receivedString ?? "")
+            timeRemaining = Int(receivedString ?? "0") ?? 0
         }
-
+    }
+    
     func connectToDevice() {
         scanForPeripheral()
     }
-        
+    
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-            disconnectAction?()
-            updateUI?() // Notify for UI update after disconnection
-            print("Disconnected from peripheral: \(peripheral.name ?? "Unknown")")
-            isConnected = false
-        }
-
-}
-
-
-class UVNotificationManager {
-
-    func scheduleNotification() {
-        // Create a notification content
-        let content = UNMutableNotificationContent()
-        content.title = "Your Notification Title"
-        content.body = "Your Notification Body"
-        
-        // Set the notification sound
-        content.sound = UNNotificationSound.default
-        
-        // Create a trigger for the notification (you can customize this based on your requirements)
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
-        
-        // Create a notification request
-        let request = UNNotificationRequest(identifier: "YourNotificationIdentifier", content: content, trigger: trigger)
-        
-        // Add the notification request to the notification center
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Error scheduling notification: \(error.localizedDescription)")
-            } else {
-                print("Notification scheduled successfully")
-            }
-        }
+        disconnectAction?()
+        updateUI?() // Notify for UI update after disconnection
+        print("Disconnected from peripheral: \(peripheral.name ?? "Unknown")")
+        isConnected = false
     }
+    
 }
-
-

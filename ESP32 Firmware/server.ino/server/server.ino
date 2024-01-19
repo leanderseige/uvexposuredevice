@@ -22,9 +22,9 @@ int timeRunner = 0;
 // See the following for generating UUIDs:
 // https://www.uuidgenerator.net/
 
-#define SERVICE_UUID "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"  // UART service UUID
-#define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
-#define CHARACTERISTIC_UUID_TX "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+#define SERVICE_UUID "BB82E92C-1477-4FD6-B59F-3AE6AEC3B706"  // UART service UUID
+#define CHARACTERISTIC_UUID_RX "B7EA89CF-9E06-4F8A-8017-1F6B63EA6E20"
+#define CHARACTERISTIC_UUID_TX "17A87C7C-582D-4500-B229-29AAE234910C"
 
 
 class MyServerCallbacks : public BLEServerCallbacks {
@@ -59,6 +59,14 @@ class MyCallbacks : public BLECharacteristicCallbacks {
   }
 };
 
+void blink() {
+  digitalWrite(TESTLED, HIGH);
+  digitalWrite(LED, HIGH);
+  delay(500);
+  digitalWrite(TESTLED, LOW);
+  digitalWrite(LED, LOW);
+  delay(500);
+}
 
 void setup() {
   pinMode(LED, OUTPUT);
@@ -71,7 +79,7 @@ void setup() {
   Serial.begin(115200);
 
   // Create the BLE Device
-  BLEDevice::init("UART Service");
+  BLEDevice::init("UVExposureDevice");
 
   // Create the BLE Server
   pServer = BLEDevice::createServer();
@@ -96,16 +104,15 @@ void setup() {
   // Start the service
   pService->start();
 
+  blink();
+
   // Start advertising
   pServer->getAdvertising()->start();
-  Serial.println("Waiting a client connection to notify...");
 
-  for (int c = 0; c < 3; c++) {
-    digitalWrite(TESTLED, HIGH);
-    delay(100);
-    digitalWrite(TESTLED, LOW);
-    delay(100);
-  }
+  blink();
+  blink();
+
+  Serial.println("Waiting a client connection to notify...");
 }
 
 void loop() {
@@ -129,6 +136,7 @@ void loop() {
       delay(100);
     }
   } else {
+    delay(100);
     Serial.println("NOT CONNECTED");
   }
 
