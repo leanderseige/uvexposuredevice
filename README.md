@@ -1,3 +1,5 @@
+<img src="IMG_7681_UV_Controllere.PNG" align="right" width="200" />
+
 # UV Exposure Device
 
 When planning my first attempt to etch my own circuit boards, I realized that I needed a solution for exposing the circuit boards to UV light. Of course, it was tempting for me to solve this task on a DIY basis as well. Many people on the net have built their own UB exposure devices based on old flatbed scanners. I liked that idea and so I built my own UV exposure device too:
