@@ -4,7 +4,7 @@ When planning my first attempt to etch my own circuit boards, I realized that I 
 
 <img src="images/IMG_5348.JPG" height="200" /><img src="images/IMG_5359.JPG" height="200" /><img src="images/IMG_7681_UV_Controllere.PNG" height="200" />
 
-For the sake of transparency, I have to admit that I have never used the device to make printed circuit boards because I have since learned about the ironing method and stuck with it
+For the sake of transparency, I have to admit that I have never used the device to make printed circuit boards because I have since learned about the ironing method and stuck with it. Nevertheless, I am sharing my work in case it helps others who want to follow a similar path.
 
 ## Architecture
 
